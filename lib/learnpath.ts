@@ -151,8 +151,11 @@ export function decideRecommendation(e: StudentEvidence, jev: JevResult): Recomm
   ) {
     conflict = true;
     reasons.push(
-      `Strong prerequisite check (${e.prerequisiteCheck.score}%) but ${downstreamWrong} later skills failed with no clear explanation — conflicting evidence, flagged for review.`,
+      `Strong prerequisite check (${e.prerequisiteCheck.score}%) but ${downstreamWrong} later skills failed with no clear explanation — conflicting evidence. Gathering more rather than prescribing, and flagged for review.`,
     );
+    // Conflicting evidence is not a diagnosis: gather more instead of prescribing
+    // a specific need (mirrors the contradiction branch above).
+    likelyNeed = "insufficient_evidence";
   }
 
   // --- Confidence / teacher-review gating ----------------------------------

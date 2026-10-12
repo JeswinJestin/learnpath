@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-10-12T09:59:01.617Z",
+  "timestamp": "2026-10-12T10:13:53.673Z",
   "backend": "demo",
   "split": "all",
-  "score": 90.56,
+  "score": 100,
   "cases": [
     {
       "id": "aarav",
@@ -92,16 +92,16 @@
         "needsTeacherReview": true
       },
       "actual": {
-        "likelyNeed": "application_difficulty",
-        "interventionId": "guided_application",
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
         "needsTeacherReview": true
       },
-      "needMatch": false,
-      "interventionMatch": false,
+      "needMatch": true,
+      "interventionMatch": true,
       "reviewMatch": true,
-      "score": 0.15,
+      "score": 1,
       "reasons": [
-        "Strong prerequisite check (85%) but 3 later skills failed with no clear explanation — conflicting evidence, flagged for review."
+        "Strong prerequisite check (85%) but 3 later skills failed with no clear explanation — conflicting evidence. Gathering more rather than prescribing, and flagged for review."
       ]
     },
     {
@@ -196,8 +196,7 @@
       "conceptual_misunderstanding": 2
     },
     "insufficient_evidence": {
-      "insufficient_evidence": 2,
-      "application_difficulty": 1
+      "insufficient_evidence": 3
     }
   },
   "regressions": []

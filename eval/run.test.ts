@@ -2,13 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runEval } from "./run";
 
-test("runEval(demo, all): Dev is the only failing seed case at baseline", async () => {
+test("runEval(demo, all): every case is a full pass after iteration 1", async () => {
+  // Iteration 1 routed conflicting evidence (Dev) to insufficient_evidence, so
+  // the demo baseline is now 100% across all 9 cases. (Pre-iteration it was
+  // 90.56% with Dev the lone failure — see scoreboard history.)
   const report = await runEval("demo", "all");
+  assert.ok(report.cases.every((c) => c.score === 1), "all cases pass on demo/all");
   const dev = report.cases.find((c) => c.id === "dev")!;
-  assert.equal(dev.needMatch, false, "Dev's need is misclassified by the baseline flow");
-  // Every other case is a full pass at baseline on the demo backend.
-  const others = report.cases.filter((c) => c.id !== "dev");
-  assert.ok(others.every((c) => c.score === 1), "all non-Dev cases pass at baseline");
+  assert.ok(dev.needMatch && dev.interventionMatch && dev.reviewMatch, "Dev is now fully correct");
 });
 
 test("runEval(demo, holdout): holdout passes fully at baseline", async () => {

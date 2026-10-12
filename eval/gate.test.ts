@@ -61,6 +61,21 @@ test("surface guard catches an untracked file outside the flow (end-to-end via p
   assert.ok(v.failures.some((f) => f.includes("lib/backdoor.ts")));
 });
 
+test("fail-closed: a git-quoted special-char path never equals the flow file, so it is flagged", () => {
+  // git quotes paths with special chars, e.g. `?? "lib/odd\tname.ts"`. The quoted
+  // string can't equal lib/learnpath.ts, so the surface guard must reject it.
+  const changed = parseChangedFiles('?? "lib/odd name.ts"\n');
+  const v = gateVerdict({ ...base, changedFiles: changed });
+  assert.equal(v.ok, false, "a quoted/exotic path must be treated as outside the surface");
+});
+
+test("fail-closed: renaming the flow file OUT is caught (new path flagged)", () => {
+  const changed = parseChangedFiles("R  lib/learnpath.ts -> lib/moved.ts\n");
+  const v = gateVerdict({ ...base, changedFiles: changed });
+  assert.equal(v.ok, false);
+  assert.ok(v.failures.some((f) => f.includes("lib/moved.ts")));
+});
+
 test("isSurfaceRelevant: generated eval reports are ignored, flow + source are not", () => {
   assert.equal(isSurfaceRelevant("eval/reports/latest.json"), false);
   assert.equal(isSurfaceRelevant("eval/reports/scoreboard.md"), false);

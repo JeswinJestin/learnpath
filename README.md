@@ -22,6 +22,55 @@ Jev is a structured-decision ("System 1") model: we send one **state** (the stud
 3. Contradiction (Jev says "gap" but the prerequisite check is strong) → flag for teacher review and collect more.
 4. Weak evidence strength or low choice confidence → flag for teacher review.
 
+## The self-improving eval loop (`eval/`)
+
+The decision flow (`lib/learnpath.ts`) is only as good as it is *accurate*, so
+LearnPath ships a deterministic harness that measures that accuracy and a set of
+agents that improve it — **editing only the flow, never the rest of the app.**
+
+- **Score.** Each gold-labeled student scenario is run through the real flow and
+  scored on three fields — `likelyNeed` (0.6), `intervention` (0.25),
+  `needsTeacherReview` (0.15). The run prints a confusion matrix and appends to
+  [`eval/reports/scoreboard.md`](eval/reports/scoreboard.md).
+- **Deterministic backends.** `demo` (offline heuristic), `cache` (real Jev
+  recorded once per scenario and replayed, so only rule edits move the score),
+  and `live`. A question-set change invalidates the cache and must be re-recorded.
+- **No-overfit guards.** A hidden **holdout** split the tuner never sees, a
+  **surface guard** (`git status` must show only `lib/learnpath.ts`), a **lint**
+  that rejects hard-coded student ids/names, and a two-split **baseline** the
+  accept gate refuses to run without.
+- **Agents (`.claude/`).** `project-context` (grounds each pass), `write-checks`
+  (grows the gold set), and `build` (the only agent allowed to edit the flow),
+  driven by the `/improve-flow` orchestrator and the accept gate (`npm run eval:gate`).
+
+```bash
+npm run eval:demo      # score the flow offline (deterministic)
+npm run test           # harness unit tests (50)
+npm run eval:baseline  # record the two-split baseline the gate guards
+npm run eval:gate      # surface + lint + typecheck + no-regression gate
+```
+
+Current accuracy on the gold set (demo backend): **100%** — see the scoreboard
+and [`eval/README.md`](eval/README.md) for the methodology.
+
+## Project layout
+
+```
+lib/learnpath.ts   the diagnostic flow (questions + deterministic decision)
+lib/jev.ts         provider-agnostic Jev client (server-side key)
+lib/api-guard.ts   rate limiting + input bounding for the API routes
+app/api/*          recommend (one student) and cohort (all students) routes
+eval/              the accuracy harness, gold scenarios, and scoreboard
+.claude/           the improvement agents, skills, and /improve-flow command
+docs/superpowers/  the design spec and implementation plan
+```
+
+## Security
+
+The API routes proxy a paid key, so they are rate-limited, bound to the known
+demo cohort by default, and never leak provider error detail to clients. See
+[`SECURITY.md`](SECURITY.md).
+
 ## Run it
 
 ```bash

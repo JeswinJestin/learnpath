@@ -27,6 +27,11 @@ Both routes proxy the paid key, so they are hardened in `lib/api-guard.ts`:
   instance has its own counter, so it is not a distributed guarantee. Put a real
   rate limiter / authentication / request queue in front before exposing a key
   under load.
+- The client key is derived from `x-forwarded-for`, which is **client-settable
+  and therefore spoofable** — an attacker can rotate it to dodge the per-IP
+  limit. To stop that from also exhausting memory, the bucket map is pruned of
+  expired entries and hard-capped (`MAX_BUCKETS`), failing safe (deny) when full.
+  Real per-user limiting needs a trusted identity (auth) upstream.
 - There is no user authentication; the routes are intended for the bundled demo.
 
 ## Reporting

@@ -17,7 +17,8 @@
     "eval:record": "tsx --env-file=.env.local eval/record.ts",
     "eval:baseline": "tsx eval/baseline.ts --backend demo",
     "eval:gate": "tsx eval/gate.ts",
-    "test:eval": "node --import tsx --test eval/scoring.test.ts eval/guards.test.ts eval/scenarios.test.ts eval/backends.test.ts eval/run.test.ts eval/gate.test.ts"
+    "test:eval": "node --import tsx --test eval/scoring.test.ts eval/guards.test.ts eval/scenarios.test.ts eval/backends.test.ts eval/run.test.ts eval/gate.test.ts",
+    "test": "node --import tsx --test eval/scoring.test.ts eval/guards.test.ts eval/scenarios.test.ts eval/backends.test.ts eval/run.test.ts eval/gate.test.ts lib/api-guard.test.ts"
   },
   "dependencies": {
     "next": "16.4.0",

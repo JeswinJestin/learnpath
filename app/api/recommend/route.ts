@@ -5,11 +5,21 @@ import {
   recommend,
   type StudentEvidence,
 } from "@/lib/learnpath";
-import { jevConfigured, JevNotConfiguredError, JevRequestError } from "@/lib/jev";
+import { jevConfigured } from "@/lib/jev";
+import { allowCustomEvidence, clientKey, rateLimit, resolveEvidence } from "@/lib/api-guard";
 
 type Body = { studentId?: string; evidence?: StudentEvidence };
 
 export async function POST(request: Request) {
+  // Best-effort rate limit: this route proxies a paid Jev key.
+  const rl = rateLimit(`recommend:${clientKey(request)}`, 30, 60_000);
+  if (!rl.ok) {
+    return Response.json(
+      { error: "Rate limit exceeded. Try again shortly." },
+      { status: 429, headers: { "retry-after": String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   let body: Body;
   try {
     body = (await request.json()) as Body;
@@ -17,10 +27,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const evidence = body.evidence ?? (body.studentId ? getStudent(body.studentId) : undefined);
-  if (!evidence) {
-    return Response.json({ error: "Provide a known studentId or an evidence object." }, { status: 400 });
+  // Bound the input: known students only, unless custom evidence is enabled.
+  const resolved = resolveEvidence(body, allowCustomEvidence(), getStudent);
+  if ("error" in resolved) {
+    return Response.json({ error: resolved.error }, { status: resolved.status });
   }
+  const evidence = resolved.evidence;
 
   // No key configured -> run the clearly-labeled demo heuristic.
   if (!jevConfigured()) {
@@ -30,26 +42,19 @@ export async function POST(request: Request) {
     });
   }
 
-  // Key configured -> real Jev call. On failure, fall back to demo but surface
-  // the error so the integration can be fixed (never fake a real response).
+  // Key configured -> real Jev call. On failure, fall back to demo. The detailed
+  // provider error (endpoint + response body) is logged SERVER-SIDE only and is
+  // never returned to the client, to avoid leaking internal integration details.
   try {
     const recommendation = await recommend(evidence);
     return Response.json({ recommendation });
   } catch (err) {
-    const message =
-      err instanceof JevRequestError
-        ? err.message
-        : err instanceof JevNotConfiguredError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Unknown error calling Jev.";
-
+    console.error("[api/recommend] Jev call failed:", err instanceof Error ? err.message : err);
     return Response.json(
       {
         recommendation: decideRecommendation(evidence, demoJev(evidence)),
-        jevError: message,
-        notice: "Live Jev call failed — showing DEMO judgments (not real Jev output). See jevError.",
+        jevError: "Live Jev call failed; showing demo judgments. See server logs for details.",
+        notice: "Live Jev call failed — showing DEMO judgments (not real Jev output).",
       },
       { status: 200 },
     );

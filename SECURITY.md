@@ -32,6 +32,12 @@ Both routes proxy the paid key, so they are hardened in `lib/api-guard.ts`:
   limit. To stop that from also exhausting memory, the bucket map is pruned of
   expired entries and hard-capped (`MAX_BUCKETS`), failing safe (deny) when full.
   Real per-user limiting needs a trusted identity (auth) upstream.
+- **Inherent limit (accepted):** because the key is spoofable, an attacker can
+  fill the bucket cap with distinct forged IPs and cause legitimate users to be
+  denied for one window (a lockout DoS). This cannot be solved in-process by any
+  per-IP limiter with a spoofable key; it belongs to an upstream WAF / edge rate
+  limiter / authenticated identity. Pruning is throttled to one scan per window
+  so the flood itself costs ~O(1) per request rather than O(n²).
 - There is no user authentication; the routes are intended for the bundled demo.
 
 ## Reporting

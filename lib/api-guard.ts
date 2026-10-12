@@ -24,9 +24,23 @@ const buckets = new Map<string, Bucket>();
  */
 export const MAX_BUCKETS = 10_000;
 
+let lastPruneAt = 0;
+
 function pruneExpired(now: number): void {
   for (const [k, b] of buckets) {
     if (now >= b.resetAt) buckets.delete(k);
+  }
+}
+
+/**
+ * Prune at most once per window. Without this, a flood of distinct (spoofed)
+ * keys would trigger an O(n) scan on every new key — an O(n²) CPU DoS. Throttled
+ * pruning keeps new-key handling ~O(1) amortised while still reclaiming memory.
+ */
+function maybePrune(now: number, windowMs: number): void {
+  if (now - lastPruneAt >= windowMs) {
+    pruneExpired(now);
+    lastPruneAt = now;
   }
 }
 
@@ -39,8 +53,8 @@ export function rateLimit(
   const b = buckets.get(key);
   if (!b || now >= b.resetAt) {
     // A new (or expired) key is the only place the map can grow, so reclaim
-    // expired buckets here. If it is still full of LIVE keys, fail safe.
-    pruneExpired(now);
+    // expired buckets here (throttled). If it is still full of LIVE keys, fail safe.
+    maybePrune(now, windowMs);
     if (buckets.size >= MAX_BUCKETS) {
       return { ok: false, retryAfterMs: windowMs };
     }
@@ -62,6 +76,7 @@ export function bucketCount(): number {
 /** Test helper — clears all buckets. */
 export function resetRateLimits(): void {
   buckets.clear();
+  lastPruneAt = 0;
 }
 
 /** Best-effort client identity from proxy headers (never trusted for auth). */

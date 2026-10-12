@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gateVerdict, parseChangedFiles, isSurfaceRelevant } from "./gate";
+import { gateVerdict, parseChangedFiles, isSurfaceRelevant, baselineInputs } from "./gate";
+import type { Baseline } from "./types";
 
 const base = {
   changedFiles: ["lib/learnpath.ts"],
@@ -52,6 +53,20 @@ test("parseChangedFiles: a rename reports the new path", () => {
 
 test("parseChangedFiles: empty output is no changes", () => {
   assert.deepEqual(parseChangedFiles(""), []);
+});
+
+test("baselineInputs: a recorded two-split baseline supplies BOTH bases", () => {
+  const b: Baseline = { backend: "demo", train: 87.86, holdout: 100, timestamp: "t" };
+  const r = baselineInputs(b);
+  assert.equal(r.ok, true);
+  assert.equal(r.trainBase, 87.86);
+  assert.equal(r.holdoutBase, 100);
+});
+
+test("baselineInputs: a missing baseline refuses (gate is toothless without one)", () => {
+  const r = baselineInputs(null);
+  assert.equal(r.ok, false);
+  assert.ok(r.error && /eval:baseline/.test(r.error));
 });
 
 test("surface guard catches an untracked file outside the flow (end-to-end via parse)", () => {

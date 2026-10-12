@@ -13,11 +13,15 @@ Steps:
 2. **Checks (only if `--with-checks`).** Dispatch the `write-checks` agent to add
    one or more gold scenarios. If it added any and backend is `cache`, run
    `npm run eval:record`.
-3. **Baseline.** Run `npx tsx eval/run.ts --backend <backend> --split train --note "baseline"`
-   then `--split holdout`. This writes `reports/latest.json` (the gate's baseline).
+3. **Baseline.** Run `npm run eval:baseline` (or `tsx eval/baseline.ts --backend <backend>`).
+   This evaluates BOTH splits and writes `reports/baseline.json` — the two-split
+   pre-change baseline the gate reads (so one gate run guards train AND holdout).
+   Also run `npx tsx eval/run.ts --backend <backend> --split train --note "baseline"`
+   if you want the failing TRAIN cases captured in `reports/latest.json` for the build agent.
 4. **Build.** Dispatch the `build` agent with `eval/CONTEXT.md` and the failing
    TRAIN cases from `reports/latest.json` (do NOT pass holdout contents). It makes
-   one minimal edit to `lib/learnpath.ts` and runs `npm run eval:gate`.
+   one minimal edit to `lib/learnpath.ts` and runs `npm run eval:gate`. The gate
+   REFUSES if no `baseline.json` exists, so step 3 must run first.
 5. **Record result.**
    - If the gate passed and train rose: run
      `npx tsx eval/run.ts --backend <backend> --split all --note "<one-line change summary>"`

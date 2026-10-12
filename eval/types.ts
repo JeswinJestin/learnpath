@@ -41,3 +41,11 @@ export type RunReport = {
   confusion: Record<string, Record<string, number>>;
   regressions: string[];
 };
+
+/** Pre-change baseline captured for BOTH splits, so one gate run can guard each. */
+export type Baseline = {
+  backend: Backend;
+  train: number; // 0..100
+  holdout: number; // 0..100
+  timestamp: string;
+};

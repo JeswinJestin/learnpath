@@ -5,11 +5,12 @@ import { decideRecommendation } from "../lib/learnpath";
 import { loadScenarios } from "./scenarios/index";
 import { getJevResult } from "./backends";
 import { aggregate, confusionMatrix, regressionsVs, scoreCase } from "./scoring";
-import type { Backend, CaseResult, RunReport, Split } from "./types";
+import type { Backend, Baseline, CaseResult, RunReport, Split } from "./types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LATEST = join(HERE, "reports", "latest.json");
 const SCOREBOARD = join(HERE, "reports", "scoreboard.md");
+const BASELINE = join(HERE, "reports", "baseline.json");
 
 function readLatest(): RunReport | null {
   if (!existsSync(LATEST)) return null;
@@ -43,6 +44,24 @@ export async function runEval(backend: Backend, split: Split): Promise<RunReport
     confusion: confusionMatrix(cases),
     regressions: regressionsVs(prev && prev.split === split ? prev : null, cases),
   };
+}
+
+/** Build a two-split baseline from a train run and a holdout run (pure). */
+export function buildBaseline(backend: Backend, train: RunReport, holdout: RunReport): Baseline {
+  return { backend, train: train.score, holdout: holdout.score, timestamp: new Date().toISOString() };
+}
+
+export function writeBaseline(b: Baseline): void {
+  writeFileSync(BASELINE, JSON.stringify(b, null, 2));
+}
+
+export function readBaseline(): Baseline | null {
+  if (!existsSync(BASELINE)) return null;
+  try {
+    return JSON.parse(readFileSync(BASELINE, "utf8")) as Baseline;
+  } catch {
+    return null;
+  }
 }
 
 export function formatReport(r: RunReport): string {

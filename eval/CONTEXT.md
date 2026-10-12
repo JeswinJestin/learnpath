@@ -27,12 +27,13 @@ Current thresholds (verbatim):
 - **Rule 1 (thin evidence):** `evidenceSignals ≤ 1` OR `enough_evidence < 0.5` → force insufficient_evidence.
 - **Rule 2 (prereq override):** observed prerequisite `< 40` → force prerequisite_gap (overrides a non-prereq Jev choice).
 - **Rule 3 (contradiction):** Jev says prerequisite_gap but observed prereq `≥ 70` → force insufficient_evidence + review.
-- **Rule 4 (conflict):** non-insufficient need, prereq `≥ 70`, ≥2 downstream skills wrong, uninformative explanation → set review=true (but the need is left as-is).
+- **Rule 4 (conflict):** non-insufficient need, prereq `≥ 70`, ≥2 downstream skills wrong, uninformative explanation → route to insufficient_evidence (gather more) AND set review=true. _(Iteration 1 changed this from "flag but keep the need" to "gather more", mirroring Rule 3.)_
 - **Confidence gating:** weak evidence (`strength < 2`) or low top choice prob (`0 < p < 0.6`) → review=true (only when a specific need is chosen).
 
-## 5. Known failure modes (from latest.json — backend=demo, split=all, score 90.56%)
-- **dev — FAIL (need + intervention wrong; review correct).** Expected insufficient_evidence/ask_diagnostic/review=true; flow produced **application_difficulty**/guided_application/review=true. Flow reasons note the conflict (strong prereq 85% + multiple downstream failures + uninformative "I'm not sure") and set review=true, **but Rule 4 leaves the need as application_difficulty instead of routing to insufficient_evidence.** This is the open gap between "flag for review" and "gather more evidence" in the conflict branch.
-- All other seed + holdout cases pass fully at this baseline.
+## 5. Known failure modes (from latest.json — backend=demo, split=all, score 100.00% after iteration 1)
+- **No failing cases.** All 7 seed + 2 holdout cases are full passes on the demo backend.
+- **dev — now PASS** (was the pre-iteration-1 failure). Rule 4 routes its contradictory evidence (strong prereq 85% + ≥2 downstream failures + uninformative "I'm not sure") to insufficient_evidence/ask_diagnostic/review=true, matching the gold label.
+- Next targets must come from new scenarios (write-checks) or the `cache`/`live` backends, where real Jev may disagree with the demo heuristic.
 
 ## 6. Open label questions
 - **priya** — secure across all stages, but the 4-way need Choice has no "on track" option, so the recommend flow routes a no-problem student to insufficient_evidence. Labeled to CURRENT behavior and tracked as a limitation (spec §5.6); not a build-agent tuning target until the product decides whether "secure/ready" is a diagnosable outcome.

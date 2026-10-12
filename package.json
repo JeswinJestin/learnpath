@@ -15,6 +15,7 @@
     "eval:demo": "tsx eval/run.ts --backend demo --split all",
     "eval:live": "tsx --env-file=.env.local eval/run.ts --backend live --split all",
     "eval:record": "tsx --env-file=.env.local eval/record.ts",
+    "eval:baseline": "tsx eval/baseline.ts --backend demo",
     "eval:gate": "tsx eval/gate.ts",
     "test:eval": "node --import tsx --test eval/scoring.test.ts eval/guards.test.ts eval/scenarios.test.ts eval/backends.test.ts eval/run.test.ts eval/gate.test.ts"
   },

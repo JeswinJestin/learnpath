@@ -1,11 +1,9 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { surfaceGuard, noSpecialCasingLint } from "./guards";
 import { forbiddenTokens } from "./scenarios/index";
-import { runEval } from "./run";
-import type { RunReport } from "./types";
+import { runEval, readBaseline } from "./run";
+import type { Baseline } from "./types";
 
 export type GateInput = {
   changedFiles: string[];
@@ -30,9 +28,6 @@ export function gateVerdict(i: GateInput): { ok: boolean; failures: string[] } {
   if (i.holdoutScore < i.holdoutBase) failures.push(`holdout regressed ${i.holdoutBase} → ${i.holdoutScore}`);
   return { ok: failures.length === 0, failures };
 }
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const LATEST = join(HERE, "reports", "latest.json");
 
 function sh(cmd: string): string {
   return execSync(cmd, { encoding: "utf8" });
@@ -72,17 +67,32 @@ function addedLines(): string[] {
   return diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"));
 }
 
-function prevBaseline(split: "train" | "holdout"): number {
-  if (!existsSync(LATEST)) return 0;
-  try {
-    const r = JSON.parse(readFileSync(LATEST, "utf8")) as RunReport;
-    return r.split === split ? r.score : 0;
-  } catch {
-    return 0;
+/**
+ * Resolve the pre-change baseline into gate inputs. A MISSING baseline refuses
+ * (ok:false): a gate run without a recorded two-split baseline cannot guard a
+ * regression and must not silently pass. Pure + unit-tested.
+ */
+export function baselineInputs(
+  b: Baseline | null,
+): { ok: boolean; trainBase: number; holdoutBase: number; error?: string } {
+  if (!b) {
+    return {
+      ok: false,
+      trainBase: 0,
+      holdoutBase: 0,
+      error: "no baseline recorded; run `npm run eval:baseline` before the flow edit",
+    };
   }
+  return { ok: true, trainBase: b.train, holdoutBase: b.holdout };
 }
 
 async function main() {
+  const base = baselineInputs(readBaseline());
+  if (!base.ok) {
+    console.error(`✗ GATE FAIL — ${base.error}`);
+    process.exit(1);
+  }
+
   let typecheckOk = true;
   try {
     sh("npm run -s typecheck");
@@ -98,16 +108,18 @@ async function main() {
     forbidden: forbiddenTokens(),
     typecheckOk,
     trainScore: train.score,
-    trainBase: prevBaseline("train"),
+    trainBase: base.trainBase,
     holdoutScore: holdout.score,
-    holdoutBase: prevBaseline("holdout"),
+    holdoutBase: base.holdoutBase,
   });
 
   if (!verdict.ok) {
     for (const f of verdict.failures) console.error(`✗ GATE FAIL — ${f}`);
     process.exit(1);
   }
-  console.log(`✓ GATE PASS — train ${train.score}% · holdout ${holdout.score}%`);
+  console.log(
+    `✓ GATE PASS — train ${train.score}% (base ${base.trainBase}) · holdout ${holdout.score}% (base ${base.holdoutBase})`,
+  );
 }
 
 // Only run as a CLI; importing gateVerdict from a test must not trigger this.

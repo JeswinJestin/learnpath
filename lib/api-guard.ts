@@ -15,6 +15,21 @@ import type { StudentEvidence } from "./data";
 type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 
+/**
+ * Hard cap on distinct rate-limit buckets. The client key derives from the
+ * (spoofable) x-forwarded-for header, so an attacker could otherwise mint an
+ * unbounded number of buckets and exhaust memory. We prune expired buckets and,
+ * when the map is genuinely full of live keys, FAIL SAFE by denying rather than
+ * growing without bound.
+ */
+export const MAX_BUCKETS = 10_000;
+
+function pruneExpired(now: number): void {
+  for (const [k, b] of buckets) {
+    if (now >= b.resetAt) buckets.delete(k);
+  }
+}
+
 export function rateLimit(
   key: string,
   limit: number,
@@ -23,6 +38,12 @@ export function rateLimit(
 ): { ok: boolean; retryAfterMs: number } {
   const b = buckets.get(key);
   if (!b || now >= b.resetAt) {
+    // A new (or expired) key is the only place the map can grow, so reclaim
+    // expired buckets here. If it is still full of LIVE keys, fail safe.
+    pruneExpired(now);
+    if (buckets.size >= MAX_BUCKETS) {
+      return { ok: false, retryAfterMs: windowMs };
+    }
     buckets.set(key, { count: 1, resetAt: now + windowMs });
     return { ok: true, retryAfterMs: 0 };
   }
@@ -31,6 +52,11 @@ export function rateLimit(
   }
   b.count++;
   return { ok: true, retryAfterMs: 0 };
+}
+
+/** Test/introspection helper — current number of live buckets. */
+export function bucketCount(): number {
+  return buckets.size;
 }
 
 /** Test helper — clears all buckets. */

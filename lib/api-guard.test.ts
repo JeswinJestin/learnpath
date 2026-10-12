@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rateLimit, resetRateLimits, clientKey, resolveEvidence } from "./api-guard";
+import { rateLimit, resetRateLimits, bucketCount, MAX_BUCKETS, clientKey, resolveEvidence } from "./api-guard";
 import type { StudentEvidence } from "./data";
 
 const fakeEvidence = (id: string): StudentEvidence => ({
@@ -37,6 +37,26 @@ test("rateLimit: separate keys have independent buckets", () => {
   rateLimit("a", 1, 1000, t0);
   assert.equal(rateLimit("a", 1, 1000, t0).ok, false);
   assert.equal(rateLimit("b", 1, 1000, t0).ok, true);
+});
+
+test("rateLimit: evicts expired buckets so the map does not grow unbounded", () => {
+  resetRateLimits();
+  const t0 = 1_000_000;
+  for (let i = 0; i < 100; i++) rateLimit(`ip-${i}`, 5, 1000, t0);
+  assert.equal(bucketCount(), 100);
+  // A later call (past the window) prunes the expired buckets.
+  rateLimit("fresh", 5, 1000, t0 + 2000);
+  assert.ok(bucketCount() < 100, "expired buckets should be pruned");
+});
+
+test("rateLimit: caps total buckets and fail-safe denies when full of live keys", () => {
+  resetRateLimits();
+  const t0 = 1_000_000;
+  for (let i = 0; i < MAX_BUCKETS; i++) {
+    assert.equal(rateLimit(`live-${i}`, 5, 60_000, t0).ok, true);
+  }
+  // One more distinct (live) key cannot allocate — denied rather than OOM.
+  assert.equal(rateLimit("overflow", 5, 60_000, t0).ok, false);
 });
 
 test("clientKey: takes the first x-forwarded-for IP", () => {

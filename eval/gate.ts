@@ -38,8 +38,33 @@ function sh(cmd: string): string {
   return execSync(cmd, { encoding: "utf8" });
 }
 
+/**
+ * Parse `git status --porcelain` output into the list of changed paths,
+ * INCLUDING untracked (`??`) files — so a flow edit smuggled into a new,
+ * never-added file cannot slip past the surface guard. Pure + unit-tested.
+ */
+export function parseChangedFiles(porcelain: string): string[] {
+  const out: string[] = [];
+  for (const raw of porcelain.split("\n")) {
+    if (!raw.trim()) continue;
+    const rest = raw.slice(3); // strip the 2-char status + separating space
+    const path = rest.includes(" -> ") ? rest.split(" -> ")[1] : rest; // renames report the new path
+    const trimmed = path.trim();
+    if (trimmed) out.push(trimmed);
+  }
+  return out;
+}
+
+/**
+ * Generated eval outputs are expected to change on every run, so they are not
+ * "the flow" and must not trip the surface guard.
+ */
+export function isSurfaceRelevant(path: string): boolean {
+  return !path.startsWith("eval/reports/");
+}
+
 function changedFiles(): string[] {
-  return sh("git diff --name-only HEAD").split("\n").map((s) => s.trim()).filter(Boolean);
+  return parseChangedFiles(sh("git status --porcelain")).filter(isSurfaceRelevant);
 }
 
 function addedLines(): string[] {

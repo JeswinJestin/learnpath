@@ -1,0 +1,203 @@
+{
+  "timestamp": "2026-10-12T10:13:53.673Z",
+  "backend": "demo",
+  "split": "all",
+  "score": 100,
+  "cases": [
+    {
+      "id": "aarav",
+      "expected": {
+        "likelyNeed": "prerequisite_gap",
+        "interventionId": "prerequisite_revision",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "prerequisite_gap",
+        "interventionId": "prerequisite_revision",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Prerequisite check failed (25%), consistent with Jev."
+      ]
+    },
+    {
+      "id": "meera",
+      "expected": {
+        "likelyNeed": "application_difficulty",
+        "interventionId": "guided_application",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "application_difficulty",
+        "interventionId": "guided_application",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Evidence consistently indicates \"application_difficulty\" (p=0.73), with 4 supporting sources."
+      ]
+    },
+    {
+      "id": "rohan",
+      "expected": {
+        "likelyNeed": "conceptual_misunderstanding",
+        "interventionId": "alternative_explanation",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "conceptual_misunderstanding",
+        "interventionId": "alternative_explanation",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Evidence consistently indicates \"conceptual_misunderstanding\" (p=0.73), with 3 supporting sources."
+      ]
+    },
+    {
+      "id": "sana",
+      "expected": {
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Only 0 source of evidence beyond the score — too thin to diagnose."
+      ]
+    },
+    {
+      "id": "dev",
+      "expected": {
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
+        "needsTeacherReview": true
+      },
+      "actual": {
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
+        "needsTeacherReview": true
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Strong prerequisite check (85%) but 3 later skills failed with no clear explanation — conflicting evidence. Gathering more rather than prescribing, and flagged for review."
+      ]
+    },
+    {
+      "id": "priya",
+      "expected": {
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "insufficient_evidence",
+        "interventionId": "ask_diagnostic",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Evidence consistently indicates \"insufficient_evidence\" (p=0.25), with 4 supporting sources."
+      ]
+    },
+    {
+      "id": "kabir",
+      "expected": {
+        "likelyNeed": "application_difficulty",
+        "interventionId": "guided_application",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "application_difficulty",
+        "interventionId": "guided_application",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Evidence consistently indicates \"application_difficulty\" (p=0.73), with 4 supporting sources."
+      ]
+    },
+    {
+      "id": "nina",
+      "expected": {
+        "likelyNeed": "prerequisite_gap",
+        "interventionId": "prerequisite_revision",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "prerequisite_gap",
+        "interventionId": "prerequisite_revision",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Prerequisite check failed (20%), consistent with Jev."
+      ]
+    },
+    {
+      "id": "omar",
+      "expected": {
+        "likelyNeed": "conceptual_misunderstanding",
+        "interventionId": "alternative_explanation",
+        "needsTeacherReview": false
+      },
+      "actual": {
+        "likelyNeed": "conceptual_misunderstanding",
+        "interventionId": "alternative_explanation",
+        "needsTeacherReview": false
+      },
+      "needMatch": true,
+      "interventionMatch": true,
+      "reviewMatch": true,
+      "score": 1,
+      "reasons": [
+        "Evidence consistently indicates \"conceptual_misunderstanding\" (p=0.73), with 3 supporting sources."
+      ]
+    }
+  ],
+  "confusion": {
+    "prerequisite_gap": {
+      "prerequisite_gap": 2
+    },
+    "application_difficulty": {
+      "application_difficulty": 2
+    },
+    "conceptual_misunderstanding": {
+      "conceptual_misunderstanding": 2
+    },
+    "insufficient_evidence": {
+      "insufficient_evidence": 3
+    }
+  },
+  "regressions": []
+}

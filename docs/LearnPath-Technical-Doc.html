@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LearnPath — Technical & Design Document</title>
+<style>
+:root { --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --accent:#0f172a; --code:#f1f5f9; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink); line-height: 1.55; font-size: 11.5pt;
+  max-width: 820px; margin: 0 auto; padding: 48px 40px;
+}
+h1 { font-size: 26pt; letter-spacing: -0.02em; margin: 0 0 6px; }
+h2 { font-size: 16pt; letter-spacing: -0.01em; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+h3 { font-size: 12.5pt; margin: 22px 0 6px; }
+h4 { font-size: 11.5pt; margin: 16px 0 4px; color: var(--muted); }
+p, li { color: var(--ink); }
+a { color: #1d4ed8; text-decoration: none; }
+strong { color: var(--ink); }
+hr { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
+blockquote {
+  margin: 14px 0; padding: 10px 16px; border-left: 3px solid var(--accent);
+  background: #f8fafc; color: var(--muted); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 4px 0; }
+code { font-family: "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 9.8pt;
+  background: var(--code); padding: 1.5px 5px; border-radius: 4px; }
+pre { background: var(--code); padding: 14px 16px; border-radius: 10px; overflow-x: auto;
+  border: 1px solid var(--line); page-break-inside: avoid; }
+pre code { background: none; padding: 0; font-size: 9.2pt; line-height: 1.45; }
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 9.8pt; page-break-inside: avoid; }
+th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+th { background: #f1f5f9; font-weight: 600; }
+tr:nth-child(even) td { background: #fafbfc; }
+ul, ol { padding-left: 22px; }
+li { margin: 3px 0; }
+h1, h2, h3, h4 { page-break-after: avoid; }
+@page { size: A4; margin: 16mm; }
+@media print { body { padding: 0; max-width: none; } a { color: var(--ink); } }
+</style>
+</head>
+<body>
+<h1>LearnPath — Technical &amp; Design Document</h1>
+<p><strong>A Water-Cycle learning diagnostic powered by the Jev decision model.</strong>
+Grade 5 · teacher-facing · Next.js 16 · React 19 · Tailwind v4</p>
+<blockquote>
+<p><strong>One line:</strong> A low score tells us a student is <em>struggling</em>. It doesn&#39;t tell us <em>what help they need</em>. LearnPath gathers targeted evidence, uses <strong>Jev</strong> (a System-1 decision model) to interpret it, and lets <strong>explicit, testable code</strong> choose the next step — so the same 40% can lead to different, inspectable decisions.</p>
+</blockquote>
+<hr>
+<h2>0. Table of contents</h2>
+<ol>
+<li>The core idea</li>
+<li>System architecture (the &quot;understanding layer&quot;)</li>
+<li>Module-by-module walkthrough</li>
+<li>The Jev judgments (&quot;agents&quot;) in detail</li>
+<li>The decision policy — Jev informs, code decides</li>
+<li>The understanding profile (propensity vector) + cohort view</li>
+<li>Accuracy: what we measure, and how to raise it</li>
+<li>Why Jev over a general LLM (+ the four TypeSafe patterns we use)</li>
+<li>Advantages &amp; use cases</li>
+<li>Limitations &amp; guardrails</li>
+<li>How to run / wire the key / demo script</li>
+<li>Roadmap: from demo to edtech platform</li>
+</ol>
+<hr>
+<h2>1. The core idea</h2>
+<p>Two students can both score <strong>40%</strong> on the same water-cycle assessment for completely different reasons:</p>
+<table>
+<thead>
+<tr>
+<th>Student</th>
+<th>Why they scored 40%</th>
+<th>Right next step</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Aarav</td>
+<td>Doesn&#39;t grasp <strong>evaporation</strong> (a prerequisite)</td>
+<td>Prerequisite revision</td>
+</tr>
+<tr>
+<td>Meera</td>
+<td>Knows the stages but can&#39;t <strong>apply</strong> them</td>
+<td>Guided application</td>
+</tr>
+<tr>
+<td>Rohan</td>
+<td>Holds a <strong>misconception</strong> (&quot;clouds fill like a sponge&quot;)</td>
+<td>Alternative explanation</td>
+</tr>
+<tr>
+<td>Sana</td>
+<td>We only have a <strong>score</strong> — no evidence</td>
+<td>Ask a diagnostic question</td>
+</tr>
+<tr>
+<td>Dev</td>
+<td><strong>Conflicting</strong> evidence</td>
+<td>Flag for teacher review</td>
+</tr>
+</tbody></table>
+<p>Giving all five the same remedial lesson wastes the opportunity. LearnPath&#39;s job is to decide <strong>what to teach next</strong>, from the evidence available <strong>and the uncertainty in that evidence</strong>.</p>
+<p>The design discipline (straight from the Jev talk): <strong>the LLM/decision model writes judgments; a &quot;smart if-statement&quot; — our own tested code — makes the final decision.</strong> Jev interprets the evidence; LearnPath selects the intervention using explicit rules and never lets a model&#39;s guess silently override a directly-observed result.</p>
+<hr>
+<h2>2. System architecture — the &quot;understanding layer&quot;</h2>
+<p>LearnPath is not another LMS. It sits <strong>between</strong> the evidence sources and the actions taken on a student&#39;s behalf:</p>
+<pre><code>Evidence sources            THE UNDERSTANDING LAYER (LearnPath)        Surfaces
+─────────────────           ──────────────────────────────────        ─────────────
+Assessment score     ┐      ┌─ Jev: structured judgments ──┐     ┌→ Teacher backend
+item-level results   ├───►  │   Choice / Score / Noul       │ ──► ├→ Learning-path change
+prerequisite check   │      │   over one shared STATE        │     ├→ Recommendation
+student explanation  ┘      └─ Code: policy + human rules ───┘     └→ (future) message
+                                        ▲                                 │
+                                        └──────── feedback loop ──────────┘
+                                          (did the intervention work?)
+</code></pre>
+<p>Two clean responsibilities:</p>
+<ul>
+<li><strong>Jev</strong> answers <em>bounded</em> questions and returns <strong>probabilities</strong>, not prose, at low latency (~300 ms).</li>
+<li><strong>Our code</strong> applies thresholds, prerequisite overrides, contradiction checks, and human-review rules to produce an <strong>inspectable</strong> decision with reason codes.</li>
+</ul>
+<h3>Request/response data flow (diagnostic path)</h3>
+<pre><code>Browser (page.tsx)
+  └─ POST /api/recommend { studentId }
+       └─ lib/learnpath.ts: recommend(evidence)
+            ├─ buildQuestions()               → 4 typed Jev questions
+            ├─ lib/jev.ts: decide(state, qs)  → POST api.typesafe.ai/v1/systemone
+            │        (key read server-side only)
+            └─ decideRecommendation(evidence, jevAnswers)  → deterministic policy
+       ◄─ { recommendation: { intervention, reasons, needsTeacherReview, jev:{…} } }
+</code></pre>
+<hr>
+<h2>3. Module-by-module walkthrough</h2>
+<h3>3.1 <code>lib/jev.ts</code> — provider-agnostic Jev client (server-only)</h3>
+<p>The single place that talks to Jev. Responsibilities:</p>
+<ul>
+<li><strong>Provider abstraction.</strong> Jev is reachable through several providers with slightly different endpoints. A <code>JEV_PROVIDER</code> env var selects one:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>provider</th>
+<th>endpoint</th>
+<th>model</th>
+<th>boolean type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>typesafe</code> <em>(our key)</em></td>
+<td><code>https://api.typesafe.ai/v1/systemone</code></td>
+<td><code>jev-latest</code></td>
+<td><code>noul</code></td>
+</tr>
+<tr>
+<td><code>vercel</code></td>
+<td><code>https://ai-gateway.vercel.sh/v1/evaluate</code></td>
+<td><code>typesafe-ai/jev</code></td>
+<td><code>boolean</code></td>
+</tr>
+<tr>
+<td><code>openrouter</code></td>
+<td><code>https://openrouter.ai/api/alpha/decisions</code></td>
+<td><code>typesafe/jev-1.13</code></td>
+<td><code>noul</code></td>
+</tr>
+<tr>
+<td><code>aimlapi</code></td>
+<td><code>https://api.aimlapi.com/v1/decisions</code></td>
+<td><code>typesafe/jev</code></td>
+<td><code>noul</code></td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>Provider-neutral question type.</strong> Callers write questions once (<code>kind: &quot;boolean&quot; | &quot;choice&quot; | &quot;score&quot;</code>); the client serializes them per provider (e.g. maps <code>boolean</code> → <code>noul</code> for TypeSafe).</li>
+<li><strong>Response normalization.</strong> Every provider&#39;s answer is coerced into one uniform shape. Notably, TypeSafe returns a boolean as <code>{ &quot;type&quot;: &quot;noul&quot;, &quot;noul&quot;: 0.79 }</code> — the normalizer reads <code>noul</code>, <code>probability</code>, <code>p</code>, or <code>yes</code>, whichever is present.</li>
+<li><strong>Security.</strong> The API key is read from <code>JEV_API_KEY</code> / <code>AI_GATEWAY_API_KEY</code> <strong>server-side only</strong> and never shipped to the browser.</li>
+<li><strong>Typed errors.</strong> <code>JevNotConfiguredError</code> (no key) and <code>JevRequestError</code> (non-200) let callers fall back to a clearly-labeled demo.</li>
+</ul>
+<p><strong>Request shape sent to Jev:</strong></p>
+<pre><code class="language-json">{
+  &quot;model&quot;: &quot;jev-latest&quot;,
+  &quot;state&quot;: { /* the StudentEvidence object */ },
+  &quot;questions&quot;: {
+    &quot;likely_need&quot;:   { &quot;type&quot;: &quot;choice&quot;, &quot;instructions&quot;: &quot;…&quot;, &quot;criteria&quot;: { … } },
+    &quot;enough_evidence&quot;: { &quot;type&quot;: &quot;noul&quot;, &quot;instructions&quot;: &quot;…&quot; }
+  }
+}
+</code></pre>
+<p><strong>Response (normalized):</strong></p>
+<pre><code class="language-json">{
+  &quot;likely_need&quot;:   { &quot;kind&quot;: &quot;choice&quot;,  &quot;choice&quot;: &quot;prerequisite_gap&quot;, &quot;probabilities&quot;: { … } },
+  &quot;enough_evidence&quot;: { &quot;kind&quot;: &quot;boolean&quot;, &quot;probability&quot;: 0.79 }
+}
+</code></pre>
+<h3>3.2 <code>lib/data.ts</code> — pure domain model &amp; types (client + server safe)</h3>
+<p>No I/O, no secrets, so both the server and the client page import it.</p>
+<ul>
+<li><strong>Topic &amp; skills.</strong> <code>water_cycle</code>, with four skills ordered prerequisite→application: <code>evaporation_basics</code>, <code>condensation</code>, <code>precipitation</code>, <code>apply_real_world</code>.</li>
+<li><strong><code>StudentEvidence</code></strong> — the input state: score, per-item results, a prerequisite check, the student&#39;s explanation, and an applied-task result.</li>
+<li><strong>Interventions</strong> — four pre-written, teacher-controlled activities (<code>prerequisite_revision</code>, <code>alternative_explanation</code>, <code>guided_application</code>, <code>ask_diagnostic</code>), each with steps, a next activity, and a mastery check.</li>
+<li><strong>Seed students</strong> — seven cases covering every scenario (5 strugglers + Priya &quot;secure&quot; + Kabir &quot;progressing&quot;).</li>
+<li><strong>Profile helpers</strong> — <code>avgMastery</code>, <code>weakestSkill</code>, <code>strongestSkill</code>, <code>isSecure</code>, <code>deriveProfileFlags</code>, <code>buildProfileSummary</code> (pure functions used by the cohort view).</li>
+</ul>
+<h3>3.3 <code>lib/learnpath.ts</code> — the brain (server-only)</h3>
+<ul>
+<li><code>buildQuestions()</code> — the 4 <strong>diagnostic</strong> Jev questions.</li>
+<li><code>decideRecommendation(evidence, jev)</code> — the <strong>deterministic policy</strong> (Section 5).</li>
+<li><code>recommend(evidence)</code> — full pipeline: build → call Jev → decide.</li>
+<li><code>buildProfileQuestions()</code> — the 7 <strong>understanding-profile</strong> Jev questions.</li>
+<li><code>computeProfile(evidence, jev)</code> / <code>profileFor(evidence)</code> — build the propensity vector.</li>
+<li><code>demoJev</code> / <code>demoProfileJev</code> — clearly-labeled heuristic fallbacks, used only when no key is configured (or a live call fails). <strong>Never presented as real Jev output.</strong></li>
+</ul>
+<h3>3.4 API routes</h3>
+<ul>
+<li><code>POST /api/recommend</code> — one student&#39;s diagnostic. Falls back to demo (labeled) if unconfigured or on error, surfacing the real error so the integration can be fixed.</li>
+<li><code>GET /api/cohort</code> — every student&#39;s understanding profile, computed in parallel (<code>Promise.all</code>); per-student fallback to demo so one failure never blanks the dashboard.</li>
+</ul>
+<h3>3.5 UI</h3>
+<ul>
+<li><code>app/page.tsx</code> — two tabs: <strong>Diagnostic</strong> (single student, the &quot;same 40%&quot; hook) and <strong>Teacher cohort</strong>.</li>
+<li><code>app/cohort-view.tsx</code> — the dashboard: a summary strip (at-risk / needs-evidence / ready counts), a roster of student cards (radar + mini-stats + flags), and a detail panel (large radar, mastery bars, propensity, raw Jev Choice).</li>
+<li><code>components/charts.tsx</code> — dependency-free SVG <code>RadarChart</code>, <code>Bar</code>, <code>LabeledBar</code>, theme-aware via Tailwind fill/stroke utilities.</li>
+</ul>
+<hr>
+<h2>4. The Jev judgments (&quot;agents&quot;) in detail</h2>
+<p>Each &quot;agent&quot; is a bounded Jev question. Several are answered <strong>in parallel against one shared state</strong> in a single request — this is Jev&#39;s core pattern and the reason latency stays low.</p>
+<h3>Diagnostic set (4 questions → <code>/api/recommend</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>type</th>
+<th>what it asks</th>
+<th>why Jev (not an LLM)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>likely_need</code></td>
+<td><strong>Choice</strong></td>
+<td>prerequisite_gap / conceptual_misunderstanding / application_difficulty / insufficient_evidence</td>
+<td>one label from a fixed set, with per-option probabilities — no hallucinated routing</td>
+</tr>
+<tr>
+<td><code>evidence_strength</code></td>
+<td><strong>Score</strong></td>
+<td>how strongly the evidence supports that need (very_weak…very_strong)</td>
+<td>an ordered rubric, returned as an interpolated score + per-rung probabilities</td>
+</tr>
+<tr>
+<td><code>enough_evidence</code></td>
+<td><strong>Noul</strong></td>
+<td>enough to prescribe without asking more?</td>
+<td>a calibrated yes-probability we can threshold on</td>
+</tr>
+<tr>
+<td><code>serious_prerequisite_gap</code></td>
+<td><strong>Noul</strong></td>
+<td>must a prerequisite be fixed first?</td>
+<td>a guard that feeds the &quot;prerequisite-first&quot; rule</td>
+</tr>
+</tbody></table>
+<h3>Understanding-profile set (7 questions → <code>/api/cohort</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>type</th>
+<th>what it asks</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>likely_need</code></td>
+<td>Choice</td>
+<td>same 4-way need</td>
+</tr>
+<tr>
+<td><code>mastery_evaporation_basics</code></td>
+<td>Score</td>
+<td>mastery of evaporation (none…secure)</td>
+</tr>
+<tr>
+<td><code>mastery_condensation</code></td>
+<td>Score</td>
+<td>mastery of condensation</td>
+</tr>
+<tr>
+<td><code>mastery_precipitation</code></td>
+<td>Score</td>
+<td>mastery of precipitation</td>
+</tr>
+<tr>
+<td><code>mastery_apply_real_world</code></td>
+<td>Score</td>
+<td>mastery of real-world application</td>
+</tr>
+<tr>
+<td><code>ready_to_advance</code></td>
+<td>Noul</td>
+<td>ready for the next skill?</td>
+</tr>
+<tr>
+<td><code>at_risk</code></td>
+<td>Noul</td>
+<td>at risk of falling behind without support?</td>
+</tr>
+</tbody></table>
+<p>The four mastery Scores become the <strong>mastery radar</strong>; the two Nouls become the <strong>propensity meters</strong>. Together they are the student&#39;s <strong>propensity vector</strong> — the &quot;255 probabilities&quot; idea from the talk, applied to learning.</p>
+<h3>4.3 Where Jev is used (the only two call sites)</h3>
+<p>Jev is called in <strong>exactly two places</strong> — everything else in the app is deterministic code. Each call is a <strong>single batched request</strong> (a fan-out):</p>
+<table>
+<thead>
+<tr>
+<th>Call site</th>
+<th>Entry point</th>
+<th>Jev questions</th>
+<th>TypeSafe patterns used</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Single-student diagnostic</td>
+<td><code>recommend()</code> → <code>POST /api/recommend</code></td>
+<td>4 (Choice + Score + 2 Noul)</td>
+<td>Fan-Out · Intent Routing · Confidence-Gated Routing</td>
+</tr>
+<tr>
+<td>Cohort understanding profile</td>
+<td><code>profileFor()</code> → <code>GET /api/cohort</code></td>
+<td>7 (Choice + 4 Score + 2 Noul)</td>
+<td>Fan-Out · Composite Scoring · Confidence-Gated Routing</td>
+</tr>
+</tbody></table>
+<p><strong>How we leverage it:</strong> Jev produces the <strong>signals</strong> (bounded labels, ordered scores, yes-probabilities); our code produces the <strong>decision</strong> (routing, thresholds, overrides, reason codes). We never ask Jev to &quot;pick the intervention&quot; in prose — it answers small, testable questions and <code>decideRecommendation()</code> composes them. (The named patterns are detailed in Section 8.)</p>
+<hr>
+<h2>5. The decision policy — <em>Jev informs, code decides</em></h2>
+<p><code>decideRecommendation()</code> turns Jev&#39;s probabilities into a defensible decision through <strong>explicit, ordered rules</strong>. This is the heart of the system and the reason a teacher can trust it.</p>
+<ol>
+<li><strong>Thin evidence → never prescribe.</strong> If we have ≤1 real evidence source beyond the score, <em>or</em> Jev&#39;s <code>enough_evidence</code> probability &lt; <strong>0.50</strong>, force <code>insufficient_evidence</code> → <em>ask a diagnostic question</em>. (A single score is not a diagnosis.)</li>
+<li><strong>Observed prerequisite failure overrides a model guess.</strong> If the prerequisite check score &lt; <strong>40</strong>, route to prerequisite revision even if Jev chose something else — a directly-observed fail beats an inference.</li>
+<li><strong>Contradiction → collect more + flag.</strong> If Jev says &quot;prerequisite gap&quot; but the prerequisite check is strong (≥ <strong>70</strong>), that&#39;s a contradiction → <code>insufficient_evidence</code> + teacher review.</li>
+<li><strong>Conflicting signals → flag.</strong> Strong prerequisite (≥70) but ≥2 downstream skills failed <em>and</em> no informative explanation → flag for review (don&#39;t prescribe blindly).</li>
+<li><strong>Confidence gating.</strong> If evidence strength &lt; &quot;moderate&quot;, or the top Choice probability &lt; <strong>0.60</strong>, mark <code>needsTeacherReview</code>.</li>
+</ol>
+<p>Every rule that fires appends a <strong>reason code</strong>, so the output is an audit trail, not a black box. Thresholds (<code>0.50</code>, <code>0.60</code>, <code>40</code>, <code>70</code>, strength <code>&lt; 2</code>) are <strong>tunable constants</strong> — see Section 7.</p>
+<hr>
+<h2>6. The understanding profile &amp; cohort view</h2>
+<p>For each student we compute:</p>
+<ul>
+<li><strong><code>mastery</code> vector</strong> (0–1 per skill) = Jev Score ÷ (levels−1).</li>
+<li><strong><code>readyToAdvance</code></strong>, <strong><code>atRisk</code></strong> = Jev Noul probabilities.</li>
+<li><strong>Flags</strong> (code-derived): <em>Ready to advance</em> (secure), <em>At risk</em>, <em>Needs evidence</em>, <em>Low mastery</em>, <em>On track</em>.</li>
+<li><strong><code>isSecure</code></strong> heuristic — a student with high mastery + high readiness + low risk is &quot;secure/ready,&quot; read from the mastery/propensity signals rather than the 4-way Choice (which has no &quot;on-track&quot; option and would otherwise mislabel a top student as &quot;insufficient_evidence&quot;).</li>
+<li><strong>Plain-language summary</strong> — templated from strongest/weakest skill, need, and risk.</li>
+</ul>
+<p>The cohort dashboard then renders graphs + text together: a summary strip, radar-chart cards per student, and a detailed profile panel.</p>
+<hr>
+<h2>7. Accuracy — what we measure, and how to raise it</h2>
+<h3>7.1 This is a <em>decision system</em>, not a classifier with ground truth</h3>
+<p>A student&#39;s &quot;true&quot; learning need is latent — there&#39;s no gold label to score against the way you would a spam classifier. So &quot;accuracy&quot; here is <strong>a bundle of measures</strong>, not a single number:</p>
+<table>
+<thead>
+<tr>
+<th>Measure</th>
+<th>Definition</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Scenario agreement</strong></td>
+<td>% of expert-labeled test cases where the decision matches the expected intervention</td>
+<td>catches obvious regressions (we have 5–7 such cases)</td>
+</tr>
+<tr>
+<td><strong>Calibration</strong></td>
+<td>when Jev says <em>p = 0.8</em>, is it right ~80% of the time? (reliability curve / Brier score, ECE)</td>
+<td>a probability is only useful if it&#39;s calibrated</td>
+</tr>
+<tr>
+<td><strong>Safe-abstention rate</strong></td>
+<td>% of genuinely ambiguous cases routed to <em>ask-diagnostic</em> / teacher review instead of a confident wrong answer</td>
+<td>&quot;knowing when not to prescribe&quot; is a feature</td>
+</tr>
+<tr>
+<td><strong>Human-override rate</strong></td>
+<td>how often teachers change the recommendation</td>
+<td>the real-world correctness signal</td>
+</tr>
+<tr>
+<td><strong>Downstream outcome</strong></td>
+<td>after the intervention, does the student pass a <em>new</em> transfer question?</td>
+<td>the only measure that reflects learning, not just plausibility</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>Key point for judges:</strong> success is <strong>not</strong> &quot;Jev returns the same label every time.&quot; It&#39;s whether the app makes sensible distinctions, responds to evidence changes, and handles ambiguity responsibly. The follow-up transfer check is what actually proves the help landed.</p>
+</blockquote>
+<h3>7.2 How to increase the score (accuracy), in priority order</h3>
+<ol>
+<li><strong>Richer evidence, not a bigger prompt.</strong> The biggest lever. Add item-level responses, short free-text explanations, and worked-example results. Jev reasons far better over a few hand-crafted signals than over one raw score. (From the talk: &quot;create handcrafted features that make sense,&quot; don&#39;t dump raw data.)</li>
+<li><strong>Sharper question criteria.</strong> Spell out what each Score rung and each Choice option means. Ambiguous instructions → fuzzy probabilities. Define levels (none/emerging/developing/secure), don&#39;t ask for an unexplained number.</li>
+<li><strong>Calibrate thresholds against labeled outcomes.</strong> Treat <code>0.50</code>, <code>0.60</code>, <code>40</code>, <code>70</code> as hyper-parameters. Collect ~50–100 teacher-labeled cases, then tune thresholds to maximize agreement while keeping the abstention/override rates sane. <strong>Jev&#39;s confidence ≠ probability the diagnosis is correct</strong> — calibrate against your own data before trusting a cutoff.</li>
+<li><strong>Decompose decisions into more, smaller judgments.</strong> One hallucinated bit can&#39;t topple the whole decision when it&#39;s one of several bounded questions feeding deterministic code (vs. a single chain-of-thought answer that fails as a unit).</li>
+<li><strong>Add a fallback stage.</strong> On low-confidence Choice/Score, re-ask with a second model (decision fallback) or escalate to a human. We already support this pattern via teacher review.</li>
+<li><strong>Close the feedback loop.</strong> Record whether the follow-up transfer question is answered correctly, and feed the outcome back as new evidence — turning a one-shot classifier into an adaptive loop.</li>
+<li><strong>Fine-tune your own decision model (CLM).</strong> TypeSafe&#39;s open <strong>CLM</strong> (a frozen Qwen-3-8B backbone with trainable <em>state</em> and <em>action</em> heads) can be fine-tuned on your labeled cases and self-hosted — higher accuracy on your specific rubric, data stays internal, low marginal cost on existing GPU infra.</li>
+</ol>
+<h3>7.3 Pattern-aligned upgrades (the highest-leverage, docs-backed next steps)</h3>
+<p>Each of these maps directly onto a documented TypeSafe pattern (Section 8.1):</p>
+<ul>
+<li><strong>Per-action confidence gates</strong> <em>(Confidence-Gated Routing).</em> Today <code>needsTeacherReview</code> uses a single 0.60 floor. Upgrade to <strong>stakes-based thresholds</strong>: a low-stakes action (show a hint) can auto-act at ≥0.60; a high-stakes action (mark a skill <em>mastered</em> and skip ahead) should require ≥0.85; the <strong>middle band asks the teacher to confirm</strong>. This mirrors TypeSafe&#39;s banking example (balance vs. transfer) and is the single biggest reliability win.</li>
+<li><strong>Weighted composite mastery</strong> <em>(Composite Scoring).</em> <code>avgMastery</code> is equal-weighted. Switch to <strong>decision-specific weights</strong> — e.g. an &quot;application-readiness&quot; score weights <code>apply_real_world</code> highest: <code>readiness = Σ wᵢ·masteryᵢ</code>. Same Jev scores, different rankings per decision (exactly TypeSafe&#39;s resume IC-vs-EM example).</li>
+<li><strong>Speculative fan-out judgments</strong> <em>(Speculative Fan-Out).</em> Add misconception-specific Nouls to the single request — e.g. <em>&quot;holds the &#39;clouds fill like a sponge&#39; belief?&quot;</em>, <em>&quot;thinks evaporated water is simply &#39;gone&#39;?&quot;</em>. Code reads only the branch the Choice selects; the extra questions add diagnostic power at ~no latency cost.</li>
+</ul>
+<hr>
+<h2>8. Why Jev over a general LLM — and the four patterns we use</h2>
+<h3>8.0 The one solid reason</h3>
+<p>A routing / triage decision needs two things from <strong>one fast, cheap call</strong>: a <strong>bounded answer</strong> (one of a fixed set, or a number on a fixed scale) and a <strong>calibrated confidence</strong> in that answer.</p>
+<p>A general LLM is a <em>next-token predictor</em>. To get a decision out of it you must force it onto a label, parse free text, and trust a &quot;confidence&quot; it was <strong>never trained to calibrate</strong> — and you pay System-2 latency and cost for every judgment. <strong>Jev is a System-1 decision model: the output <em>is</em> the decision, with per-option probabilities you can threshold.</strong></p>
+<p>That single property — <strong>bounded output + calibrated confidence, per call</strong> — is what makes confidence-gated routing, fan-out, and composite scoring <em>possible at all</em>. You cannot safely build those on raw LLM prose. That is the reason to choose Jev here, not a general LLM.</p>
+<h3>8.1 LearnPath implements all four documented TypeSafe patterns</h3>
+<p>From TypeSafe&#39;s own <a href="https://docs.typesafe.ai/patterns">pattern catalog</a> — LearnPath isn&#39;t using Jev ad-hoc; it composes four named patterns:</p>
+<table>
+<thead>
+<tr>
+<th>TypeSafe pattern</th>
+<th>What it is</th>
+<th>Where LearnPath uses it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong><a href="https://docs.typesafe.ai/patterns/fan-out">Speculative Fan-Out</a></strong></td>
+<td>many typed questions over one shared <code>state</code> in a single call; code picks the relevant answers</td>
+<td>both call sites send every question at once over the student <code>state</code>; <code>serious_prerequisite_gap</code> is a <em>speculative</em> question used only on some branches — &quot;everything for the decision tree from one call&quot;</td>
+</tr>
+<tr>
+<td><strong><a href="https://docs.typesafe.ai/patterns/intent-routing">Intent Routing</a></strong></td>
+<td>a Choice classifies intent → route to a handler (code / specialist / human)</td>
+<td><code>likely_need</code> Choice routes to one of four intervention handlers, or to <em>ask-diagnostic</em> / teacher (human escalation)</td>
+</tr>
+<tr>
+<td><strong><a href="https://docs.typesafe.ai/patterns/confidence-routing">Confidence-Gated Routing</a></strong></td>
+<td>confidence is a <em>second axis</em>; a global floor + per-action thresholds decide auto-act vs. confirm vs. escalate</td>
+<td><code>enough_evidence</code> &lt; 0.50 → ask for more; top Choice prob &lt; 0.60 or weak evidence strength → teacher review; contradiction → escalate. Confidence decides <em>whether to act</em>, not just <em>what</em></td>
+</tr>
+<tr>
+<td><strong><a href="https://docs.typesafe.ai/patterns/composite-scoring">Composite Scoring</a></strong></td>
+<td>split a judgment into dimensions, atomic Scores, normalize ÷(levels−1), combine with code-controlled weights</td>
+<td>the understanding profile: 4 per-skill mastery Scores → normalized → combined (<code>avgMastery</code>, weightable) into the propensity vector + flags</td>
+</tr>
+</tbody></table>
+<h3>8.2 Why Jev, not a general LLM — the mechanics</h3>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>General LLM</th>
+<th><strong>Jev</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>One of a fixed set of answers</td>
+<td>prompt-coax + parse; can drift off-list</td>
+<td><strong>native Choice</strong> over fixed criteria</td>
+</tr>
+<tr>
+<td>A number you can threshold</td>
+<td>asks for a number it may hallucinate</td>
+<td><strong>Score</strong> = interpolated position on a defined rubric</td>
+</tr>
+<tr>
+<td>A calibrated yes/no probability</td>
+<td>&quot;confidence&quot; is uncalibrated prose</td>
+<td><strong>Noul</strong> = a probability meant to be thresholded</td>
+</tr>
+<tr>
+<td>Several judgments at once</td>
+<td>N sequential calls (latency ×N)</td>
+<td><strong>one fan-out call</strong>, parallel, ~flat latency</td>
+</tr>
+<tr>
+<td>Cheap at cohort scale</td>
+<td>per-token, System-2 cost</td>
+<td>input-token priced, ~300 ms</td>
+</tr>
+<tr>
+<td>Keep workflow out of the model</td>
+<td>model must &quot;know&quot; the branching</td>
+<td>branching lives in code; the model answers atomically</td>
+</tr>
+</tbody></table>
+<h3>8.3 Decision model vs. LLM vs. classical ML</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Jev (decision model)</strong></th>
+<th><strong>LLM (e.g. GPT/Claude)</strong></th>
+<th><strong>Classical ML</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Output</td>
+<td>probabilities over fixed options</td>
+<td>free-form tokens</td>
+<td>probabilities (needs training data)</td>
+</tr>
+<tr>
+<td>System</td>
+<td><strong>System 1</strong> — fast reflex</td>
+<td>System 2 — slow reasoning</td>
+<td>fast once trained</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>~300 ms</td>
+<td>seconds</td>
+<td>ms</td>
+</tr>
+<tr>
+<td>Hallucination risk</td>
+<td>low (bounded output)</td>
+<td>higher on routing/numbers</td>
+<td>none, but brittle</td>
+</tr>
+<tr>
+<td>Setup cost</td>
+<td>write typed questions</td>
+<td>write prompts</td>
+<td>collect labels, train, serve</td>
+</tr>
+<tr>
+<td>Explainability</td>
+<td>per-option probabilities</td>
+<td>reasoning text (can be post-hoc)</td>
+<td>feature weights</td>
+</tr>
+<tr>
+<td>Best at</td>
+<td><strong>bounded, repeated decisions</strong></td>
+<td>generation, empathy, language</td>
+<td>large labeled tabular data</td>
+</tr>
+</tbody></table>
+<p>They aren&#39;t apples-to-apples. <strong>LLM writes; Jev is a smart if-statement.</strong> In LearnPath we use <strong>Jev for the judgments</strong> and reserve an <strong>LLM for generation</strong> (future: the student-facing message in the right tone).</p>
+<h3>8.4 &quot;Naive Jev output&quot; vs. LearnPath&#39;s layered decision</h3>
+<p>The critical comparison for this project: what do you get if you just trust Jev&#39;s raw output, versus running it through our policy layer?</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Raw Jev output alone</strong></th>
+<th><strong>LearnPath (Jev + deterministic policy)</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Ambiguous student (only a score)</td>
+<td>returns <em>some</em> label with a probability</td>
+<td><strong>abstains</strong> → asks a diagnostic question</td>
+</tr>
+<tr>
+<td>Contradiction (model vs. observed check)</td>
+<td>may confidently pick the wrong need</td>
+<td><strong>overrides</strong> with the observed result + flags review</td>
+</tr>
+<tr>
+<td>Auditability</td>
+<td>a label + probabilities</td>
+<td>label + probabilities <strong>+ reason codes + override trail</strong></td>
+</tr>
+<tr>
+<td>Teacher trust</td>
+<td>&quot;why did it say that?&quot;</td>
+<td>every decision is inspectable and reversible</td>
+</tr>
+<tr>
+<td>Correctness over time</td>
+<td>static</td>
+<td><strong>improves</strong> via the follow-up feedback loop</td>
+</tr>
+</tbody></table>
+<p>The layer is the product. Jev makes the layer <em>possible</em> (fast, bounded, calibrated signals); the layer makes Jev <em>safe to act on</em>.</p>
+<hr>
+<h2>9. Advantages &amp; use cases</h2>
+<p><strong>Advantages</strong></p>
+<ul>
+<li><strong>Fast &amp; cheap</strong> per decision (~300 ms, input-token-priced) — viable at classroom/cohort scale.</li>
+<li><strong>Low hallucination</strong> on the routing decision because outputs are bounded.</li>
+<li><strong>Inspectable</strong> — reason codes + probabilities a teacher can audit.</li>
+<li><strong>Responsible by design</strong> — abstains under uncertainty; keeps a human in the loop.</li>
+<li><strong>Portable</strong> — provider-agnostic client; swap TypeSafe ↔ Vercel ↔ OpenRouter with one env var.</li>
+</ul>
+<p><strong>Use cases (edtech)</strong></p>
+<ul>
+<li>Teacher cohort triage: who&#39;s at risk, who&#39;s ready, who needs more evidence — at a glance.</li>
+<li>Adaptive sequencing: bend the learning path per student instead of one remedial track.</li>
+<li>Early-warning flags for intervention before a student falls behind.</li>
+<li>Personalized, teacher-approved nudges (future, LLM-generated, Jev-gated).</li>
+<li>Plugs into existing LMS via standards (xAPI / Caliper events, LTI) — augment, don&#39;t replace.</li>
+</ul>
+<hr>
+<h2>10. Limitations &amp; guardrails</h2>
+<ul>
+<li><strong>Not a learning-assessment engine.</strong> Jev can&#39;t establish true understanding from a percentage — it needs evidence (items, prerequisite checks, explanations).</li>
+<li><strong>Confidence ≠ correctness.</strong> Calibrate thresholds against real outcomes; never auto-cast a non-zero probability to a verdict.</li>
+<li><strong>Minors&#39; data.</strong> Human-in-the-loop on anything student-facing; privacy/consent by design.</li>
+<li><strong>Small context.</strong> Decision models have limited context — feed hand-crafted features, not raw dumps.</li>
+<li><strong>Demo mode is labeled.</strong> When no key is set (or a live call fails), synthetic judgments are clearly marked &quot;Demo (not real Jev).&quot;</li>
+</ul>
+<hr>
+<h2>11. How to run / wire the key / demo script</h2>
+<p><strong>Run</strong> (from <code>learnpath/</code>):</p>
+<pre><code>npm run dev
+</code></pre>
+<p>Open <a href="http://localhost:3000">http://localhost:3000</a>.</p>
+<p><strong>Wire the Jev key</strong> — put it in <code>learnpath/.env.local</code> (gitignored, server-side only):</p>
+<pre><code>JEV_API_KEY=apikey_…
+JEV_PROVIDER=typesafe
+</code></pre>
+<p>Confirm a real call:</p>
+<pre><code>npm run verify:jev
+</code></pre>
+<p><em>(PowerShell note: use <code>;</code> or separate lines, not <code>&amp;&amp;</code>.)</em></p>
+<p><strong>90-second demo script</strong></p>
+<ol>
+<li>Student rail — point out the <strong>same ~40%</strong> across students.</li>
+<li><strong>Aarav</strong> → Recommend → prerequisite revision (failed evaporation check).</li>
+<li><strong>Meera</strong> (also 40%, strong prerequisite) → guided application. <em>Same score, different decision.</em></li>
+<li><strong>Sana</strong> (only a score) → LearnPath <strong>refuses to guess</strong> and asks for more evidence.</li>
+<li>Switch to <strong>Teacher cohort</strong> → the class at a glance: Priya <em>ready to advance</em>, the rest <em>at risk</em>, with mastery radars.</li>
+</ol>
+<hr>
+<h2>12. Roadmap — from demo to edtech platform</h2>
+<ul>
+<li><strong>Ingest</strong> real learning events via xAPI / Caliper; plug into an LMS via LTI.</li>
+<li><strong>Student-facing messages</strong> — LLM-generated, tone-adapted, Jev-gated, teacher-approved.</li>
+<li><strong>Adaptive path engine</strong> — a skill graph (DAG) whose transitions Jev + code re-route per student.</li>
+<li><strong>Outcome logging &amp; calibration</strong> — close the loop; tune thresholds on real data.</li>
+<li><strong>Self-hosted CLM</strong> — fine-tune the decision model on your rubric for higher accuracy and data residency.</li>
+</ul>
+<hr>
+<p><em>Jev returns structured probabilities (System 1). LearnPath&#39;s own code applies thresholds and human-review rules to make the final decision.</em></p>
+
+</body>
+</html>

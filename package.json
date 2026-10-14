@@ -5,7 +5,20 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "verify:jev": "node --env-file=.env.local scripts/verify-jev.mjs",
+    "build:doc": "node scripts/build-doc.mjs",
+    "eval": "tsx eval/run.ts --backend cache --split all",
+    "eval:train": "tsx eval/run.ts --backend cache --split train",
+    "eval:holdout": "tsx eval/run.ts --backend cache --split holdout",
+    "eval:demo": "tsx eval/run.ts --backend demo --split all",
+    "eval:live": "tsx --env-file=.env.local eval/run.ts --backend live --split all",
+    "eval:record": "tsx --env-file=.env.local eval/record.ts",
+    "eval:baseline": "tsx eval/baseline.ts --backend demo",
+    "eval:gate": "tsx eval/gate.ts",
+    "test:eval": "node --import tsx --test eval/scoring.test.ts eval/guards.test.ts eval/scenarios.test.ts eval/backends.test.ts eval/run.test.ts eval/gate.test.ts",
+    "test": "node --import tsx --test eval/scoring.test.ts eval/guards.test.ts eval/scenarios.test.ts eval/backends.test.ts eval/run.test.ts eval/gate.test.ts lib/api-guard.test.ts"
   },
   "dependencies": {
     "next": "16.4.0",
@@ -17,7 +30,9 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "marked": "^14.1.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

@@ -44,16 +44,19 @@ h1, h2, h3, h4 { page-break-after: avoid; }
 </head>
 <body>
 <h1>LearnPath — Technical &amp; Design Document</h1>
-<p><strong>A Water-Cycle learning diagnostic powered by the Jev decision model.</strong>
-Grade 5 · teacher-facing · Next.js 16 · React 19 · Tailwind v4</p>
+<p><strong>A worked example of a reusable <em>intervention layer</em> built on the Jev decision model.</strong>
+Next.js 16 · React 19 · Tailwind v4</p>
 <blockquote>
-<p><strong>One line:</strong> A low score tells us a student is <em>struggling</em>. It doesn&#39;t tell us <em>what help they need</em>. LearnPath gathers targeted evidence, uses <strong>Jev</strong> (a System-1 decision model) to interpret it, and lets <strong>explicit, testable code</strong> choose the next step — so the same 40% can lead to different, inspectable decisions.</p>
+<p><strong>The idea, not the topic.</strong> LearnPath demonstrates a <em>pattern</em>: a thin <strong>intervention layer</strong> that sits between raw evidence and the action taken on it — Jev turns evidence into bounded, calibrated judgments; your own deterministic code makes the inspectable decision. The <strong>Water-Cycle, Grade-5 classroom is just the example</strong> chosen to make the pattern tangible. The same layer drops into support triage, payments/fraud, KYC onboarding, moderation — anywhere you have evidence and need a decision you can trust (see §2).</p>
+</blockquote>
+<blockquote>
+<p><strong>One line (the example):</strong> A low score tells us a student is <em>struggling</em>, not <em>what help they need</em>. LearnPath gathers targeted evidence, uses <strong>Jev</strong> (a System-1 decision model) to interpret it, and lets <strong>explicit, testable code</strong> choose the next step — so the same 40% can lead to different, inspectable decisions.</p>
 </blockquote>
 <hr>
 <h2>0. Table of contents</h2>
 <ol>
 <li>The core idea</li>
-<li>System architecture (the &quot;understanding layer&quot;)</li>
+<li>The intervention layer (and where it generalizes)</li>
 <li>Module-by-module walkthrough</li>
 <li>The Jev judgments (&quot;agents&quot;) in detail</li>
 <li>The decision policy — Jev informs, code decides</li>
@@ -105,9 +108,9 @@ Grade 5 · teacher-facing · Next.js 16 · React 19 · Tailwind v4</p>
 <p>Giving all five the same remedial lesson wastes the opportunity. LearnPath&#39;s job is to decide <strong>what to teach next</strong>, from the evidence available <strong>and the uncertainty in that evidence</strong>.</p>
 <p>The design discipline (straight from the Jev talk): <strong>the LLM/decision model writes judgments; a &quot;smart if-statement&quot; — our own tested code — makes the final decision.</strong> Jev interprets the evidence; LearnPath selects the intervention using explicit rules and never lets a model&#39;s guess silently override a directly-observed result.</p>
 <hr>
-<h2>2. System architecture — the &quot;understanding layer&quot;</h2>
-<p>LearnPath is not another LMS. It sits <strong>between</strong> the evidence sources and the actions taken on a student&#39;s behalf:</p>
-<pre><code>Evidence sources            THE UNDERSTANDING LAYER (LearnPath)        Surfaces
+<h2>2. The intervention layer — and where it generalizes</h2>
+<p>LearnPath is not another LMS. It is an <strong>intervention layer</strong> that sits <strong>between</strong> the evidence sources and the action taken on it:</p>
+<pre><code>Evidence sources            THE INTERVENTION LAYER (LearnPath)         Surfaces
 ─────────────────           ──────────────────────────────────        ─────────────
 Assessment score     ┐      ┌─ Jev: structured judgments ──┐     ┌→ Teacher backend
 item-level results   ├───►  │   Choice / Score / Noul       │ ──► ├→ Learning-path change
@@ -122,6 +125,49 @@ student explanation  ┘      └─ Code: policy + human rules ───┘    
 <li><strong>Jev</strong> answers <em>bounded</em> questions and returns <strong>probabilities</strong>, not prose, at low latency (~300 ms).</li>
 <li><strong>Our code</strong> applies thresholds, prerequisite overrides, contradiction checks, and human-review rules to produce an <strong>inspectable</strong> decision with reason codes.</li>
 </ul>
+<h3>Where the same layer applies</h3>
+<p>Swap the <em>state</em> and the <em>judgments</em>; the layer is identical. The Water-Cycle diagnostic is one row:</p>
+<table>
+<thead>
+<tr>
+<th>Domain</th>
+<th>State (evidence in)</th>
+<th>Jev judgments (Choice / Score / Noul)</th>
+<th>Intervention (decision out)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Education</strong> <em>(this doc)</em></td>
+<td>assessment items, prerequisite check, student&#39;s words</td>
+<td>likely need · per-skill mastery · at-risk? ready?</td>
+<td>prerequisite revision / guided practice / re-explain / <em>ask for more</em></td>
+</tr>
+<tr>
+<td><strong>Customer support</strong></td>
+<td>ticket text + account history</td>
+<td>intent · severity · refund-likelihood · frustration</td>
+<td>auto-resolve / route to team / escalate to human</td>
+</tr>
+<tr>
+<td><strong>Payments &amp; fraud risk</strong></td>
+<td>transaction features, 15-min SR window</td>
+<td>anomaly? · risk tier · fraud-likelihood</td>
+<td>allow / step-up verify / block / human review</td>
+</tr>
+<tr>
+<td><strong>Merchant onboarding (KYC)</strong></td>
+<td>website text, submitted docs</td>
+<td>MCC category · risky-keyword? · name-match</td>
+<td>fast-approve / manual review / reject</td>
+</tr>
+<tr>
+<td><strong>Content moderation</strong></td>
+<td>a post or review</td>
+<td>violation type · severity · confidence</td>
+<td>publish / limit / send to review</td>
+</tr>
+</tbody></table>
+<p>These are exactly the bounded, high-volume, latency-sensitive decisions Jev was built for (SR-anomaly, MCC classification, risky-keyword checks, name-matching). To retarget the layer you change <code>lib/data.ts</code> (state + interventions) and the question/rule set in <code>lib/learnpath.ts</code>; <code>lib/jev.ts</code> and the eval harness stay as-is.</p>
 <h3>Request/response data flow (diagnostic path)</h3>
 <pre><code>Browser (page.tsx)
   └─ POST /api/recommend { studentId }

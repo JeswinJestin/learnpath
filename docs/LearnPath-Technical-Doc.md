@@ -1,16 +1,18 @@
 # LearnPath — Technical & Design Document
 
-**A Water-Cycle learning diagnostic powered by the Jev decision model.**
-Grade 5 · teacher-facing · Next.js 16 · React 19 · Tailwind v4
+**A worked example of a reusable _intervention layer_ built on the Jev decision model.**
+Next.js 16 · React 19 · Tailwind v4
 
-> **One line:** A low score tells us a student is *struggling*. It doesn't tell us *what help they need*. LearnPath gathers targeted evidence, uses **Jev** (a System-1 decision model) to interpret it, and lets **explicit, testable code** choose the next step — so the same 40% can lead to different, inspectable decisions.
+> **The idea, not the topic.** LearnPath demonstrates a *pattern*: a thin **intervention layer** that sits between raw evidence and the action taken on it — Jev turns evidence into bounded, calibrated judgments; your own deterministic code makes the inspectable decision. The **Water-Cycle, Grade-5 classroom is just the example** chosen to make the pattern tangible. The same layer drops into support triage, payments/fraud, KYC onboarding, moderation — anywhere you have evidence and need a decision you can trust (see §2).
+
+> **One line (the example):** A low score tells us a student is *struggling*, not *what help they need*. LearnPath gathers targeted evidence, uses **Jev** (a System-1 decision model) to interpret it, and lets **explicit, testable code** choose the next step — so the same 40% can lead to different, inspectable decisions.
 
 ---
 
 ## 0. Table of contents
 
 1. The core idea
-2. System architecture (the "understanding layer")
+2. The intervention layer (and where it generalizes)
 3. Module-by-module walkthrough
 4. The Jev judgments ("agents") in detail
 5. The decision policy — Jev informs, code decides
@@ -42,12 +44,12 @@ The design discipline (straight from the Jev talk): **the LLM/decision model wri
 
 ---
 
-## 2. System architecture — the "understanding layer"
+## 2. The intervention layer — and where it generalizes
 
-LearnPath is not another LMS. It sits **between** the evidence sources and the actions taken on a student's behalf:
+LearnPath is not another LMS. It is an **intervention layer** that sits **between** the evidence sources and the action taken on it:
 
 ```
-Evidence sources            THE UNDERSTANDING LAYER (LearnPath)        Surfaces
+Evidence sources            THE INTERVENTION LAYER (LearnPath)         Surfaces
 ─────────────────           ──────────────────────────────────        ─────────────
 Assessment score     ┐      ┌─ Jev: structured judgments ──┐     ┌→ Teacher backend
 item-level results   ├───►  │   Choice / Score / Noul       │ ──► ├→ Learning-path change
@@ -62,6 +64,20 @@ Two clean responsibilities:
 
 - **Jev** answers *bounded* questions and returns **probabilities**, not prose, at low latency (~300 ms).
 - **Our code** applies thresholds, prerequisite overrides, contradiction checks, and human-review rules to produce an **inspectable** decision with reason codes.
+
+### Where the same layer applies
+
+Swap the *state* and the *judgments*; the layer is identical. The Water-Cycle diagnostic is one row:
+
+| Domain | State (evidence in) | Jev judgments (Choice / Score / Noul) | Intervention (decision out) |
+|---|---|---|---|
+| **Education** *(this doc)* | assessment items, prerequisite check, student's words | likely need · per-skill mastery · at-risk? ready? | prerequisite revision / guided practice / re-explain / *ask for more* |
+| **Customer support** | ticket text + account history | intent · severity · refund-likelihood · frustration | auto-resolve / route to team / escalate to human |
+| **Payments & fraud risk** | transaction features, 15-min SR window | anomaly? · risk tier · fraud-likelihood | allow / step-up verify / block / human review |
+| **Merchant onboarding (KYC)** | website text, submitted docs | MCC category · risky-keyword? · name-match | fast-approve / manual review / reject |
+| **Content moderation** | a post or review | violation type · severity · confidence | publish / limit / send to review |
+
+These are exactly the bounded, high-volume, latency-sensitive decisions Jev was built for (SR-anomaly, MCC classification, risky-keyword checks, name-matching). To retarget the layer you change `lib/data.ts` (state + interventions) and the question/rule set in `lib/learnpath.ts`; `lib/jev.ts` and the eval harness stay as-is.
 
 ### Request/response data flow (diagnostic path)
 

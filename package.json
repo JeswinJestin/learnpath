@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "verify:jev": "node --env-file=.env.local scripts/verify-jev.mjs",
     "build:doc": "node scripts/build-doc.mjs",
     "eval": "tsx eval/run.ts --backend cache --split all",
